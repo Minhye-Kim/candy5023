@@ -82,7 +82,7 @@ def get_email_detail(service, msg_id: str) -> dict | None:
             'sender': sender,
             'date': date,
             'snippet': snippet,
-            'body': body[:3000],
+            'body': body[:400],
             'linkedin_urls': linkedin_urls[:5],
         }
     except Exception as e:
@@ -183,7 +183,7 @@ def main():
         return
 
     print("▶ 메일 내용 읽는 중...")
-    emails = [d for mid in all_ids[:25] if (d := get_email_detail(service, mid))]
+    emails = [d for mid in all_ids[:15] if (d := get_email_detail(service, mid))]
     print(f"  {len(emails)}개 메일 수집 완료")
 
     print("▶ Gemini로 요약 중...")
