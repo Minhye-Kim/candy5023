@@ -73,6 +73,7 @@ def get_email_detail(service, msg_id: str) -> dict | None:
         date    = next((h['value'] for h in headers if h['name'] == 'Date'), '')
         snippet = msg.get('snippet', '')
 
+        body = extract_text(msg['payload'])
         linkedin_urls = re.findall(r'https://www\.linkedin\.com/jobs/view/\d+', body)
 
         return {
