@@ -73,18 +73,15 @@ def get_email_detail(service, msg_id: str) -> dict | None:
         date    = next((h['value'] for h in headers if h['name'] == 'Date'), '')
         snippet = msg.get('snippet', '')
 
-        body = extract_text(msg['payload'])
         linkedin_urls = re.findall(r'https://www\.linkedin\.com/jobs/view/\d+', body)
 
         return {
-            'id': msg_id,
-            'subject': subject,
-            'sender': sender,
-            'date': date,
-            'snippet': snippet,
-            'body': body[:400],
-            'linkedin_urls': linkedin_urls[:5],
+        'subject': subject[:150],
+        'sender': sender[:80],
+        'snippet': snippet[:200],
+        'linkedin_urls': linkedin_urls[:3],
         }
+
     except Exception as e:
         print(f"[메일 읽기 오류] {msg_id}: {e}")
         return None
@@ -183,7 +180,7 @@ def main():
         return
 
     print("▶ 메일 내용 읽는 중...")
-    emails = [d for mid in all_ids[:15] if (d := get_email_detail(service, mid))]
+    emails = [d for mid in all_ids[:20] if (d := get_email_detail(service, mid))]
     print(f"  {len(emails)}개 메일 수집 완료")
 
     print("▶ Gemini로 요약 중...")
