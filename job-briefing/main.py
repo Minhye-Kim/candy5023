@@ -94,7 +94,7 @@ def get_email_detail(service, msg_id: str) -> dict | None:
 
 def summarize_with_claude(emails: list) -> str:
     genai.configure(api_key=os.environ['GEMINI_API_KEY'])
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-2.0-flash')
     today = datetime.now().strftime('%Y-%m-%d')
 
     prompt = f"""오늘 날짜: {today}
