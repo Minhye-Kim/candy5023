@@ -1,0 +1,31 @@
+name: Daily Job Briefing
+
+on:
+  schedule:
+    - cron: '0 23 * * 0,2,4'  # Mon/Wed/Fri 08:00 KST (UTC+9 = UTC 전날 23:00)
+  workflow_dispatch:            # 수동 실행 (테스트용)
+
+jobs:
+  briefing:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r job-briefing/requirements.txt
+
+      - name: Run job briefing
+        env:
+          GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
+          GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
+          GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python job-briefing/main.py
