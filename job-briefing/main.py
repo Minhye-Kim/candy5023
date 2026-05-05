@@ -79,6 +79,7 @@ def get_email_detail(service, msg_id: str) -> dict | None:
         'subject': subject[:150],
         'sender': sender[:80],
         'snippet': snippet[:200],
+        'body': body[:300],
         'linkedin_urls': linkedin_urls[:3],
         }
 
