@@ -8,7 +8,7 @@ from datetime import datetime
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
-import google.generativeai as genai
+from groq import Groq
 
 
 # ── Gmail 인증 ──────────────────────────────────────────────────────────────
@@ -90,12 +90,11 @@ def get_email_detail(service, msg_id: str) -> dict | None:
         return None
 
 
-# ── Gemini 요약 ─────────────────────────────────────────────────────────────
+# ── Groq 요약 ───────────────────────────────────────────────────────────────
 
 def summarize_with_claude(emails: list) -> str:
-    genai.configure(api_key=os.environ['GEMINI_API_KEY'])
-    model = genai.GenerativeModel('gemini-2.0-flash')
-    today = datetime.now().strftime('%Y-%m-%d')
+    client = Groq(api_key=os.environ['GROQ_API_KEY'])
+    today  = datetime.now().strftime('%Y-%m-%d')
 
     prompt = f"""오늘 날짜: {today}
 아래는 최근 7일간 받은 채용 관련 이메일 목록입니다.
@@ -119,8 +118,12 @@ def summarize_with_claude(emails: list) -> str:
 
 공고가 없으면 "📭 해당 기간 내 IT 직군 채용 공고 없음"만 출력."""
 
-    response = model.generate_content(prompt)
-    return response.text
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=3000
+    )
+    return response.choices[0].message.content
 
 
 # ── Discord 전송 ────────────────────────────────────────────────────────────
