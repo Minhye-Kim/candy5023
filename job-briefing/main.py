@@ -74,7 +74,7 @@ def get_email_detail(service, msg_id: str) -> dict | None:
         snippet = msg.get('snippet', '')
 
         body = extract_text(msg['payload'])
-        linkedin_urls = re.findall(r'https://www\.linkedin\.com/jobs/view/\d+', body)
+        linkedin_urls = re.findall(r'https://www\.linkedin\.com/(?:comm/)?jobs/view/\d+', body)
 
         return {
         'subject': subject[:150],
@@ -111,7 +111,9 @@ def summarize_with_claude(emails: list) -> str:
 🏢 **[회사명]** — [포지션]
 📍 [근무지] | ⏰ [마감일 또는 채용시마감]
 • [핵심 내용 1~2줄]
-🔗 [지원 링크]
+🔗 [지원 링크 — 반드시 해당 공고의 이메일 데이터 linkedin_urls 필드에 있는 URL만 사용. 확실하지 않으면 생략]
+
+중요: 링크는 절대 추측하거나 다른 공고의 URL을 가져다 쓰지 마세요. linkedin_urls에 명확히 매핑된 URL이 없으면 🔗 항목 자체를 생략하세요.
 
 마지막 줄: 📬 총 N개 공고 | PM/PO N개 · AI N개 · 개발 N개 · 기타 N개
 
