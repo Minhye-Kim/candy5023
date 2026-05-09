@@ -58,6 +58,20 @@ def extract_html(payload: dict) -> str:
     return ''
 
 
+def parse_jobkorea_jobs(raw_html: str) -> list:
+    jobs, seen = [], set()
+    for m in re.finditer(
+        r'href="(https://www\.jobkorea\.co\.kr/Recruit/GI_Read/(\d+)[^"]*)"[^>]*>\s*([^<\n]{5,})',
+        raw_html
+    ):
+        job_id, title = m.group(2), m.group(3).strip()
+        if job_id in seen:
+            continue
+        seen.add(job_id)
+        jobs.append({'title': title, 'url': f'https://www.jobkorea.co.kr/Recruit/GI_Read/{job_id}'})
+    return jobs
+
+
 def extract_text(payload: dict) -> str:
     mime = payload.get('mimeType', '')
     if mime == 'text/plain':
@@ -80,7 +94,6 @@ def get_email_detail(service, msg_id: str) -> Optional[dict]:
         headers = msg['payload']['headers']
         subject = next((h['value'] for h in headers if h['name'] == 'Subject'), '')
         sender  = next((h['value'] for h in headers if h['name'] == 'From'), '')
-        date    = next((h['value'] for h in headers if h['name'] == 'Date'), '')
         snippet = msg.get('snippet', '')
 
         body = extract_text(msg['payload'])
@@ -89,6 +102,7 @@ def get_email_detail(service, msg_id: str) -> Optional[dict]:
         jobkorea_urls = list(dict.fromkeys(
             re.findall(r'https://www\.jobkorea\.co\.kr/Recruit/GI_Read/\d+', raw_html)
         ))
+        jobkorea_jobs = parse_jobkorea_jobs(raw_html) if 'jobkorea.co.kr' in sender.lower() else []
 
         return {
         'subject': subject[:150],
@@ -97,6 +111,7 @@ def get_email_detail(service, msg_id: str) -> Optional[dict]:
         'body': body[:300],
         'linkedin_urls': linkedin_urls[:3],
         'jobkorea_urls': jobkorea_urls[:3],
+        'jobkorea_jobs': jobkorea_jobs,
         }
 
     except Exception as e:
@@ -126,9 +141,9 @@ def summarize_with_claude(emails: list) -> str:
 🏢 **[회사명]** — [포지션]
 📍 [근무지] | ⏰ [마감일 또는 채용시마감]
 • [핵심 내용 1~2줄]
-🔗 [지원 링크 — linkedin_urls 또는 jobkorea_urls 필드에 있는 URL만 사용. 확실하지 않으면 생략]
+🔗 [지원 링크 — linkedin_urls, jobkorea_urls, 또는 jobkorea_jobs[].url 필드에 있는 URL만 사용. 확실하지 않으면 생략]
 
-중요: 링크는 절대 추측하거나 다른 공고의 URL을 가져다 쓰지 마세요. linkedin_urls 또는 jobkorea_urls에 명확히 매핑된 URL이 없으면 🔗 항목 자체를 생략하세요.
+중요: 링크는 절대 추측하거나 다른 공고의 URL을 가져다 쓰지 마세요. jobkorea_jobs 필드가 있는 이메일은 해당 배열의 각 항목을 개별 공고로 처리하세요.
 
 마지막 줄: 📬 총 N개 공고 | PM/PO N개 · AI N개 · 개발 N개 · 기타 N개
 
@@ -187,11 +202,13 @@ def main():
         'subject:(채용 OR 공고 OR "JD" OR 포지션 OR "job opening"'
         ' OR "we\'re hiring" OR 리쿠르팅) newer_than:7d'
     )
+    query_c = "from:smartai@jobkorea.co.kr newer_than:7d"
 
     print("▶ 이메일 검색 중...")
     msgs_a = search_emails(service, query_a)
     msgs_b = search_emails(service, query_b)
-    all_ids = list({m['id'] for m in msgs_a + msgs_b})
+    msgs_c = search_emails(service, query_c)
+    all_ids = list({m['id'] for m in msgs_a + msgs_b + msgs_c})
     print(f"  총 {len(all_ids)}개 메일 발견")
 
     if not all_ids:
