@@ -74,21 +74,6 @@ def parse_linkedin_jobs(raw_html: str) -> list:
     return jobs
 
 
-def parse_jobkorea_jobs(raw_html: str) -> list:
-    jobs, seen = [], set()
-    blocks = re.findall(
-        r'<a\b[^>]*href="(https://www\.jobkorea\.co\.kr/Recruit/GI_Read/(\d+)[^"]*)"[^>]*>(.*?)</a>',
-        raw_html,
-        re.DOTALL | re.IGNORECASE,
-    )
-    for _, job_id, inner in blocks:
-        title = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', '', inner)).strip()
-        if job_id in seen or len(title) < 5:
-            continue
-        seen.add(job_id)
-        jobs.append({'title': title, 'url': f'https://www.jobkorea.co.kr/Recruit/GI_Read/{job_id}'})
-    return jobs
-
 
 def extract_text(payload: dict) -> str:
     mime = payload.get('mimeType', '')
@@ -117,10 +102,6 @@ def get_email_detail(service, msg_id: str) -> Optional[dict]:
         body = extract_text(msg['payload'])
         raw_html = extract_html(msg['payload'])
         linkedin_urls = re.findall(r'https://www\.linkedin\.com/(?:comm/)?jobs/view/\d+', body)
-        jobkorea_urls = list(dict.fromkeys(
-            re.findall(r'https://www\.jobkorea\.co\.kr/Recruit/GI_Read/\d+', raw_html)
-        ))
-        jobkorea_jobs = parse_jobkorea_jobs(raw_html) if 'jobkorea.co.kr' in sender.lower() else []
         linkedin_jobs = parse_linkedin_jobs(raw_html) if 'linkedin' in sender.lower() else []
 
         return {
@@ -129,9 +110,7 @@ def get_email_detail(service, msg_id: str) -> Optional[dict]:
         'snippet': snippet[:200],
         'body': body[:300],
         'linkedin_urls': linkedin_urls[:3],
-        'jobkorea_urls': jobkorea_urls[:3],
         'linkedin_jobs': linkedin_jobs,
-        'jobkorea_jobs': jobkorea_jobs,
         }
 
     except Exception as e:
@@ -148,17 +127,9 @@ def collect_jobs(emails: list) -> list:
             if job['url'] not in seen:
                 seen.add(job['url'])
                 jobs.append(job)
-        for job in email.get('jobkorea_jobs', []):
-            if job['url'] not in seen:
-                seen.add(job['url'])
-                jobs.append(job)
         # 파서 미적용 이메일 fallback
-        if not email.get('linkedin_jobs') and not email.get('jobkorea_jobs'):
+        if not email.get('linkedin_jobs'):
             for url in email.get('linkedin_urls', []):
-                if url not in seen:
-                    seen.add(url)
-                    jobs.append({'title': email.get('subject', ''), 'url': url})
-            for url in email.get('jobkorea_urls', []):
                 if url not in seen:
                     seen.add(url)
                     jobs.append({'title': email.get('subject', ''), 'url': url})
@@ -287,13 +258,10 @@ def main():
         'subject:(채용 OR 공고 OR "JD" OR 포지션 OR "job opening"'
         ' OR "we\'re hiring" OR 리쿠르팅) newer_than:7d'
     )
-    query_c = "from:smartai@jobkorea.co.kr newer_than:7d"
-
     print("▶ 이메일 검색 중...")
     msgs_a = search_emails(service, query_a)
     msgs_b = search_emails(service, query_b)
-    msgs_c = search_emails(service, query_c)
-    all_ids = list({m['id'] for m in msgs_a + msgs_b + msgs_c})
+    all_ids = list({m['id'] for m in msgs_a + msgs_b})
     print(f"  총 {len(all_ids)}개 메일 발견")
 
     if not all_ids:
