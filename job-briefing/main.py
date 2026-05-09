@@ -141,44 +141,105 @@ def get_email_detail(service, msg_id: str) -> Optional[dict]:
 
 # ── Groq 요약 ───────────────────────────────────────────────────────────────
 
+def collect_jobs(emails: list) -> list:
+    seen, jobs = set(), []
+    for email in emails:
+        for job in email.get('linkedin_jobs', []):
+            if job['url'] not in seen:
+                seen.add(job['url'])
+                jobs.append(job)
+        for job in email.get('jobkorea_jobs', []):
+            if job['url'] not in seen:
+                seen.add(job['url'])
+                jobs.append(job)
+        # 파서 미적용 이메일 fallback
+        if not email.get('linkedin_jobs') and not email.get('jobkorea_jobs'):
+            for url in email.get('linkedin_urls', []):
+                if url not in seen:
+                    seen.add(url)
+                    jobs.append({'title': email.get('subject', ''), 'url': url})
+            for url in email.get('jobkorea_urls', []):
+                if url not in seen:
+                    seen.add(url)
+                    jobs.append({'title': email.get('subject', ''), 'url': url})
+    return jobs
+
+
 def summarize_with_groq(emails: list) -> str:
+    jobs = collect_jobs(emails)
+    if not jobs:
+        return "📭 해당 기간 내 채용 관련 공고가 없습니다."
+
     client = Groq(api_key=os.environ['GROQ_API_KEY'])
     today  = datetime.now().strftime('%Y-%m-%d')
 
     prompt = f"""오늘 날짜: {today}
-아래는 최근 7일간 받은 채용 관련 이메일 목록입니다.
 
-{json.dumps(emails, ensure_ascii=False, indent=2)}
+아래는 채용공고 목록입니다 (index, title, url).
 
-다음 규칙에 따라 IT 직군 채용 공고만 정리해주세요.
+{json.dumps([{'index': i, 'title': j['title'], 'url': j['url']} for i, j in enumerate(jobs)], ensure_ascii=False, indent=2)}
 
-포함 직군: PM, PO, Product Manager, Product Owner, AI Engineer, ML Engineer, 서비스 기획, 기획자, 데이터 분석, UX, 백엔드, 프론트엔드, 풀스택, DevOps, MLOps, LLM, AI
+IT 직군 공고만 골라 아래 JSON 배열 형식으로만 응답하세요. 다른 텍스트는 출력하지 마세요.
 
-제외: 인턴, 알바, 단기, 게임회사(넥슨, 크래프톤, NC소프트, 넷마블, 스마일게이트, 펄어비스, 컴투스, Riot Games)
+포함: PM, PO, Product Manager, Product Owner, AI Engineer, ML Engineer, 서비스기획, 데이터분석, UX, 백엔드, 프론트엔드, 풀스택, DevOps, MLOps, LLM, AI
+제외: 인턴, 알바, 단기, 게임회사(넥슨·크래프톤·NC소프트·넷마블·스마일게이트·펄어비스·컴투스·Riot Games), eCommerce운영, 패션, 행정, 영업, 회계
 
-★ 핵심 규칙 (반드시 준수):
-1. jobkorea_jobs 배열이 있으면 → 배열의 각 항목(title + url)을 개별 공고로 출력. url은 반드시 그대로 사용.
-2. linkedin_jobs 배열이 있으면 → 배열의 각 항목(title + url)을 개별 공고로 출력. url은 반드시 그대로 사용.
-3. 위 배열이 없으면 → linkedin_urls, jobkorea_urls 필드의 URL 사용.
-4. URL이 없으면 🔗 줄 생략. 절대 URL 추측·조합 금지.
-
-출력 형식 (공고 1개당):
----
-🏢 **[회사명]** — [포지션]
-📍 [근무지] | ⏰ [마감일] ← 정보 없으면 이 줄 생략
-• [핵심 내용 1~2줄] ← 정보 없으면 이 줄 생략
-🔗 [url 필드값 그대로]
-
-마지막 줄: 📬 총 N개 공고 | PM/PO N개 · AI N개 · 개발 N개 · 기타 N개
-
-공고가 없으면 "📭 해당 기간 내 IT 직군 채용 공고 없음"만 출력."""
+응답 형식:
+[
+  {{"index": 0, "company": "회사명", "position": "포지션명", "location": "근무지 또는 null", "description": "핵심 내용 1줄 또는 null"}},
+  ...
+]"""
 
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=3000
+        max_tokens=2000
     )
-    return response.choices[0].message.content
+
+    raw = response.choices[0].message.content.strip()
+    try:
+        match = re.search(r'\[.*\]', raw, re.DOTALL)
+        classified = json.loads(match.group()) if match else []
+    except Exception:
+        return f"[요약 파싱 오류]\n{raw}"
+
+    if not classified:
+        return "📭 해당 기간 내 IT 직군 채용 공고 없음"
+
+    counts = {'pm': 0, 'ai': 0, 'dev': 0, 'other': 0}
+    lines = []
+    for item in classified:
+        idx = item.get('index', -1)
+        if not (0 <= idx < len(jobs)):
+            continue
+        url      = jobs[idx]['url']
+        company  = item.get('company', '')
+        position = item.get('position', '')
+        location = item.get('location')
+        desc     = item.get('description')
+
+        lines.append('---')
+        lines.append(f"🏢 **{company}** — {position}")
+        if location:
+            lines.append(f"📍 {location}")
+        if desc:
+            lines.append(f"• {desc}")
+        lines.append(f"🔗 {url}")
+        lines.append('')
+
+        p = position.lower()
+        if any(k in p for k in ['pm', 'po', 'product manager', 'product owner', '기획']):
+            counts['pm'] += 1
+        elif any(k in p for k in ['ai', 'ml', 'llm', 'mlops', 'data', '데이터']):
+            counts['ai'] += 1
+        elif any(k in p for k in ['backend', 'frontend', '백엔드', '프론트', 'devops', '개발', 'engineer', 'developer']):
+            counts['dev'] += 1
+        else:
+            counts['other'] += 1
+
+    total = len(classified)
+    lines.append(f"📬 총 {total}개 공고 | PM/PO {counts['pm']}개 · AI {counts['ai']}개 · 개발 {counts['dev']}개 · 기타 {counts['other']}개")
+    return '\n'.join(lines)
 
 
 # ── Discord 전송 ────────────────────────────────────────────────────────────
