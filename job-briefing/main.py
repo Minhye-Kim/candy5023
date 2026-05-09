@@ -58,6 +58,22 @@ def extract_html(payload: dict) -> str:
     return ''
 
 
+def parse_linkedin_jobs(raw_html: str) -> list:
+    jobs, seen = [], set()
+    blocks = re.findall(
+        r'<a\b[^>]*href="(https://www\.linkedin\.com/(?:comm/)?jobs/view/(\d+)[^"]*)"[^>]*>(.*?)</a>',
+        raw_html,
+        re.DOTALL | re.IGNORECASE,
+    )
+    for _, job_id, inner in blocks:
+        title = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', '', inner)).strip()
+        if job_id in seen or len(title) < 5:
+            continue
+        seen.add(job_id)
+        jobs.append({'title': title, 'url': f'https://www.linkedin.com/jobs/view/{job_id}'})
+    return jobs
+
+
 def parse_jobkorea_jobs(raw_html: str) -> list:
     jobs, seen = [], set()
     blocks = re.findall(
@@ -105,6 +121,7 @@ def get_email_detail(service, msg_id: str) -> Optional[dict]:
             re.findall(r'https://www\.jobkorea\.co\.kr/Recruit/GI_Read/\d+', raw_html)
         ))
         jobkorea_jobs = parse_jobkorea_jobs(raw_html) if 'jobkorea.co.kr' in sender.lower() else []
+        linkedin_jobs = parse_linkedin_jobs(raw_html) if 'linkedin' in sender.lower() else []
 
         return {
         'subject': subject[:150],
@@ -113,6 +130,7 @@ def get_email_detail(service, msg_id: str) -> Optional[dict]:
         'body': body[:300],
         'linkedin_urls': linkedin_urls[:3],
         'jobkorea_urls': jobkorea_urls[:3],
+        'linkedin_jobs': linkedin_jobs,
         'jobkorea_jobs': jobkorea_jobs,
         }
 
@@ -141,11 +159,12 @@ def summarize_with_claude(emails: list) -> str:
 출력 형식 (공고 1개당):
 ---
 🏢 **[회사명]** — [포지션]
-📍 [근무지] | ⏰ [마감일 또는 채용시마감]
-• [핵심 내용 1~2줄]
-🔗 [지원 링크 — linkedin_urls, jobkorea_urls, 또는 jobkorea_jobs[].url 필드에 있는 URL만 사용. 확실하지 않으면 생략]
+📍 [근무지] | ⏰ [마감일] ← 정보 없으면 이 줄 생략
+• [핵심 내용 1~2줄] ← 정보 없으면 이 줄 생략
+🔗 [지원 링크]
 
-중요: 링크는 절대 추측하거나 다른 공고의 URL을 가져다 쓰지 마세요. jobkorea_jobs 필드가 있는 이메일은 해당 배열의 각 항목을 개별 공고로 처리하세요.
+링크 규칙: linkedin_jobs[].url, jobkorea_jobs[].url, linkedin_urls, jobkorea_urls 순으로 사용. 없으면 🔗 줄 생략. 절대 추측 금지.
+데이터 규칙: linkedin_jobs 또는 jobkorea_jobs 배열이 있으면 각 항목을 개별 공고로 처리. 공고명은 title 필드 사용.
 
 마지막 줄: 📬 총 N개 공고 | PM/PO N개 · AI N개 · 개발 N개 · 기타 N개
 
@@ -218,7 +237,7 @@ def main():
         return
 
     print("▶ 메일 내용 읽는 중...")
-    emails = [d for mid in all_ids[:20] if (d := get_email_detail(service, mid))]
+    emails = [d for mid in all_ids[:30] if (d := get_email_detail(service, mid))]
     print(f"  {len(emails)}개 메일 수집 완료")
 
     print("▶ Gemini로 요약 중...")
