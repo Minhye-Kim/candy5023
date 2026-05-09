@@ -156,15 +156,18 @@ def summarize_with_groq(emails: list) -> str:
 
 제외: 인턴, 알바, 단기, 게임회사(넥슨, 크래프톤, NC소프트, 넷마블, 스마일게이트, 펄어비스, 컴투스, Riot Games)
 
+★ 핵심 규칙 (반드시 준수):
+1. jobkorea_jobs 배열이 있으면 → 배열의 각 항목(title + url)을 개별 공고로 출력. url은 반드시 그대로 사용.
+2. linkedin_jobs 배열이 있으면 → 배열의 각 항목(title + url)을 개별 공고로 출력. url은 반드시 그대로 사용.
+3. 위 배열이 없으면 → linkedin_urls, jobkorea_urls 필드의 URL 사용.
+4. URL이 없으면 🔗 줄 생략. 절대 URL 추측·조합 금지.
+
 출력 형식 (공고 1개당):
 ---
 🏢 **[회사명]** — [포지션]
 📍 [근무지] | ⏰ [마감일] ← 정보 없으면 이 줄 생략
 • [핵심 내용 1~2줄] ← 정보 없으면 이 줄 생략
-🔗 [지원 링크]
-
-링크 규칙: linkedin_jobs[].url, jobkorea_jobs[].url, linkedin_urls, jobkorea_urls 순으로 사용. 없으면 🔗 줄 생략. 절대 추측 금지.
-데이터 규칙: linkedin_jobs 또는 jobkorea_jobs 배열이 있으면 각 항목을 개별 공고로 처리. 공고명은 title 필드 사용.
+🔗 [url 필드값 그대로]
 
 마지막 줄: 📬 총 N개 공고 | PM/PO N개 · AI N개 · 개발 N개 · 기타 N개
 
