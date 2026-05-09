@@ -60,12 +60,14 @@ def extract_html(payload: dict) -> str:
 
 def parse_jobkorea_jobs(raw_html: str) -> list:
     jobs, seen = [], set()
-    for m in re.finditer(
-        r'href="(https://www\.jobkorea\.co\.kr/Recruit/GI_Read/(\d+)[^"]*)"[^>]*>\s*([^<\n]{5,})',
-        raw_html
-    ):
-        job_id, title = m.group(2), m.group(3).strip()
-        if job_id in seen:
+    blocks = re.findall(
+        r'<a\b[^>]*href="(https://www\.jobkorea\.co\.kr/Recruit/GI_Read/(\d+)[^"]*)"[^>]*>(.*?)</a>',
+        raw_html,
+        re.DOTALL | re.IGNORECASE,
+    )
+    for _, job_id, inner in blocks:
+        title = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', '', inner)).strip()
+        if job_id in seen or len(title) < 5:
             continue
         seen.add(job_id)
         jobs.append({'title': title, 'url': f'https://www.jobkorea.co.kr/Recruit/GI_Read/{job_id}'})
