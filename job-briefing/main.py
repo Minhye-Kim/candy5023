@@ -141,7 +141,7 @@ def get_email_detail(service, msg_id: str) -> Optional[dict]:
 
 # ── Groq 요약 ───────────────────────────────────────────────────────────────
 
-def summarize_with_claude(emails: list) -> str:
+def summarize_with_groq(emails: list) -> str:
     client = Groq(api_key=os.environ['GROQ_API_KEY'])
     today  = datetime.now().strftime('%Y-%m-%d')
 
@@ -240,8 +240,8 @@ def main():
     emails = [d for mid in all_ids[:30] if (d := get_email_detail(service, mid))]
     print(f"  {len(emails)}개 메일 수집 완료")
 
-    print("▶ Gemini로 요약 중...")
-    summary = summarize_with_claude(emails)
+    print("▶ Grok으로 요약 중...")
+    summary = summarize_with_groq(emails)
 
     print("▶ Discord 전송 중...")
     send_to_discord(summary)
