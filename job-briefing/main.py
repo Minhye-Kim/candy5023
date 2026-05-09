@@ -49,6 +49,15 @@ def decode_body(data: str) -> str:
         return ''
 
 
+def extract_html(payload: dict) -> str:
+    mime = payload.get('mimeType', '')
+    if mime == 'text/html':
+        return decode_body(payload.get('body', {}).get('data', ''))
+    if 'parts' in payload:
+        return ' '.join(extract_html(p) for p in payload['parts'])
+    return ''
+
+
 def extract_text(payload: dict) -> str:
     mime = payload.get('mimeType', '')
     if mime == 'text/plain':
@@ -75,8 +84,11 @@ def get_email_detail(service, msg_id: str) -> Optional[dict]:
         snippet = msg.get('snippet', '')
 
         body = extract_text(msg['payload'])
+        raw_html = extract_html(msg['payload'])
         linkedin_urls = re.findall(r'https://www\.linkedin\.com/(?:comm/)?jobs/view/\d+', body)
-        jobkorea_urls = re.findall(r'https://www\.jobkorea\.co\.kr/[Rr]ecruit/[Gg][Ii]_[Rr]ead/\d+', body)
+        jobkorea_urls = list(dict.fromkeys(
+            re.findall(r'https://www\.jobkorea\.co\.kr/Recruit/GI_Read/\d+', raw_html)
+        ))
 
         return {
         'subject': subject[:150],
