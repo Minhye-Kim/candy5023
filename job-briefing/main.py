@@ -4,6 +4,7 @@ import json
 import base64
 import requests
 from datetime import datetime
+from typing import Optional
 
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
@@ -61,7 +62,7 @@ def extract_text(payload: dict) -> str:
     return ''
 
 
-def get_email_detail(service, msg_id: str) -> dict | None:
+def get_email_detail(service, msg_id: str) -> Optional[dict]:
     try:
         msg = service.users().messages().get(
             userId='me', id=msg_id, format='full'
@@ -75,6 +76,7 @@ def get_email_detail(service, msg_id: str) -> dict | None:
 
         body = extract_text(msg['payload'])
         linkedin_urls = re.findall(r'https://www\.linkedin\.com/(?:comm/)?jobs/view/\d+', body)
+        jobkorea_urls = re.findall(r'https://www\.jobkorea\.co\.kr/[Rr]ecruit/[Gg][Ii]_[Rr]ead/\d+', body)
 
         return {
         'subject': subject[:150],
@@ -82,6 +84,7 @@ def get_email_detail(service, msg_id: str) -> dict | None:
         'snippet': snippet[:200],
         'body': body[:300],
         'linkedin_urls': linkedin_urls[:3],
+        'jobkorea_urls': jobkorea_urls[:3],
         }
 
     except Exception as e:
@@ -111,9 +114,9 @@ def summarize_with_claude(emails: list) -> str:
 🏢 **[회사명]** — [포지션]
 📍 [근무지] | ⏰ [마감일 또는 채용시마감]
 • [핵심 내용 1~2줄]
-🔗 [지원 링크 — 반드시 해당 공고의 이메일 데이터 linkedin_urls 필드에 있는 URL만 사용. 확실하지 않으면 생략]
+🔗 [지원 링크 — linkedin_urls 또는 jobkorea_urls 필드에 있는 URL만 사용. 확실하지 않으면 생략]
 
-중요: 링크는 절대 추측하거나 다른 공고의 URL을 가져다 쓰지 마세요. linkedin_urls에 명확히 매핑된 URL이 없으면 🔗 항목 자체를 생략하세요.
+중요: 링크는 절대 추측하거나 다른 공고의 URL을 가져다 쓰지 마세요. linkedin_urls 또는 jobkorea_urls에 명확히 매핑된 URL이 없으면 🔗 항목 자체를 생략하세요.
 
 마지막 줄: 📬 총 N개 공고 | PM/PO N개 · AI N개 · 개발 N개 · 기타 N개
 
